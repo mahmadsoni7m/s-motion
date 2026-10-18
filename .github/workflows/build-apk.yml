@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
-    name: Build SONI MOTION STUDIO
+    name: Build SONI MOTION STUDIO APK
     runs-on: ubuntu-latest
 
     env:
@@ -27,28 +27,29 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Find Android SDK
+      - name: Locate Android SDK
         shell: bash
         run: |
           set -e
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          test -d "$ANDROID_HOME"
+          if [ ! -d "$ANDROID_HOME" ]; then
+            echo "Android SDK directory not found: $ANDROID_HOME"
+            exit 1
+          fi
 
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
             -type f -name sdkmanager 2>/dev/null | head -n 1)"
 
           if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found"
+            echo "sdkmanager not found"
             exit 1
           fi
 
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
 
-      - name: Accept SDK licenses
+      - name: Accept Android SDK licenses
         shell: bash
         run: |
-          set -e
           yes | "$SDKMANAGER" --licenses || true
 
       - name: Install Android SDK, NDK and CMake
@@ -69,18 +70,34 @@ jobs:
           gradle-version: '8.9'
 
       - name: Build Debug APK
+        run: |
+          gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK
         shell: bash
         run: |
-          gradle assembleDebug \
-            --no-daemon \
-            --stacktrace
+          set -e
+          APK="app/build/outputs/apk/debug/app-debug.apk"
 
-      - name: Upload APK
-        if: success()
-        uses: actions/upload-artifact@v4
+          if [ ! -s "$APK" ]; then
+            echo "APK missing or empty: $APK"
+            exit 1
+          fi
+
+          ls -lh "$APK"
+          sha256sum "$APK"
+
+      - name: Publish APK Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: SONI-MOTION-STUDIO-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 7
+          tag_name: apk-build-${{ github.run_number }}
+          name: SONI MOTION STUDIO APK Build ${{ github.run_number }}
+          body: |
+            SONI MOTION STUDIO Android Debug APK.
+
+            Download app-debug.apk below and install it on your Android phone.
+          prerelease: true
+          make_latest: false
+          files: app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
           
