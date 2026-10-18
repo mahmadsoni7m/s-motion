@@ -100,8 +100,13 @@ class Exporter(private val ctx: Context) {
             OverlayEffect(ImmutableList.of<TextureOverlay>(CardOverlay(w, h, spec, an, audioStart))),
             FxEffect(an, audioStart, glitch)
         )
-        val video = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(base)))
-            .setDurationUs((durSec * 1e6).toLong()).setFrameRate(30)
+        // Image inputs need their duration on MediaItem, not EditedMediaItem.
+        val imageItem = MediaItem.Builder()
+            .setUri(Uri.fromFile(base))
+            .setImageDurationMs((durSec * 1000f).toLong())
+            .build()
+        val video = EditedMediaItem.Builder(imageItem)
+            .setFrameRate(30)
             .setEffects(Effects(emptyList(), videoEffects)).build()
         val seqs = mutableListOf(EditedMediaItemSequence(listOf(video)))
         if (audioUri != null) {

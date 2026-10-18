@@ -130,9 +130,15 @@ fun Studio() {
 
     SideEffect { view.keepScreenOn = exporting }
 
-    val pickImg = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) cover = loadBitmap(ctx, uri) }
-    val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    val pickImg = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
+            runCatching { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            cover = loadBitmap(ctx, uri)
+        }
+    }
+    val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             audioUri = uri; an = null; audioStart = 0f; status = "Analyzing audio..."
             scope.launch {
                 val a = withContext(Dispatchers.Default) { AudioDecoder.decode(ctx, uri) }
@@ -145,18 +151,37 @@ fun Studio() {
     val effDur = (an?.let { min(dur, it.durSec - audioStart) } ?: dur).coerceAtLeast(1f)
     val spec = Spec(style, accent, title, artist, handle, effDur, 30, cover)
 
-    LaunchedEffect(playing) {
+    LaunchedEffect(playing, audioUri) {
         if (!playing) return@LaunchedEffect
         var mp: MediaPlayer? = null
         try {
-            audioUri?.let { u -> mp = MediaPlayer.create(ctx, u)?.apply { seekTo(((audioStart + t) * 1000).toInt()); start() } }
+            audioUri?.let { uri ->
+                val player = MediaPlayer()
+                mp = player
+                player.setOnPreparedListener {
+                    it.seekTo(((audioStart + t) * 1000).toInt())
+                    it.start()
+                }
+                player.setOnErrorListener { _, what, extra ->
+                    status = "Music playback failed ($what/$extra)"
+                    playing = false
+                    true
+                }
+                player.setDataSource(ctx, uri)
+                player.prepareAsync()
+            }
             val t0 = withFrameNanos { it } - (t * 1e9).toLong()
             while (true) {
                 val n = withFrameNanos { it }
                 t = (n - t0) / 1e9f
                 if (t >= effDur) { t = 0f; playing = false; break }
             }
-        } finally { mp?.release() }
+        } catch (e: Exception) {
+            status = "Music playback failed: " + (e.message ?: "cannot open audio")
+            playing = false
+        } finally {
+            runCatching { mp?.release() }
+        }
     }
 
     LaunchedEffect(exporting) {
@@ -191,8 +216,8 @@ fun Studio() {
             }
             Section("MEDIA") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { pickImg.launch("image/*") }) { Text(if (cover == null) "Choose image" else "Image set") }
-                    OutlinedButton(onClick = { pickAudio.launch("audio/*") }) { Text(if (audioUri == null) "Choose music" else "Music set") }
+                    OutlinedButton(onClick = { pickImg.launch(arrayOf("image/*")) }) { Text(if (cover == null) "Choose image" else "Image set") }
+                    OutlinedButton(onClick = { pickAudio.launch(arrayOf("audio/*")) }) { Text(if (audioUri == null) "Choose music" else "Music set") }
                 }
                 an?.let { a ->
                     Text("Start: " + fmtT(audioStart), fontSize = 12.sp)
