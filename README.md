@@ -10,7 +10,7 @@ Create. Animate. Feel the Beat.
 - **Vulkan**: only a device-capability probe. Rendering does NOT use Vulkan.
 
 ## Styles
-Player card (cover photo + waveform bar), Glass cover, Neon timer, Ring logo. Pick image, music, colour, text.
+Layouts: Player card, Glass cover, Neon timer, Ring logo, Effects only. Plus 21 procedural backgrounds, 15 combinable effects and 20 presets, colour/filter/camera sliders, music trim, volume and mute, text overlay, save/load projects and JSON import/export.
 
 ## Build the APK with GitHub Actions
 1. Create a repo and upload all files (keep the `.github` folder).

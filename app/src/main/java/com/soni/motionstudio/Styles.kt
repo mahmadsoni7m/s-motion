@@ -3,9 +3,9 @@ package com.soni.motionstudio
 import android.graphics.*
 import kotlin.math.*
 
-enum class Style(val label: String) { PLAYER("Player card"), GLASS("Glass cover"), NEON("Neon timer"), RING("Ring logo") }
+enum class Style(val label: String) { PLAYER("Player card"), GLASS("Glass cover"), NEON("Neon timer"), RING("Ring logo"), NONE("Effects only") }
 
-class Spec(val style: Style, val accent: Int, val title: String, val artist: String, val handle: String, val dur: Float, val fps: Int, val cover: Bitmap?)
+class Spec(val style: Style, val accent: Int, val title: String, val artist: String, val handle: String, val dur: Float, val fps: Int, val cover: Bitmap?, val cfg: Cfg = Cfg())
 
 /** Draws one frame of every style with the Android Canvas. Used for both preview and export. */
 object StyleRenderer {
@@ -50,6 +50,16 @@ object StyleRenderer {
         c.drawRect(0f, 0f, w, h, q)
     }
 
+    fun backdrop(c: Canvas, W: Float, H: Float, s: Spec) {
+        when (s.style) {
+            Style.PLAYER -> bg(c, W, H, s, 0xB0000000.toInt(), false)
+            Style.GLASS -> bg(c, W, H, s, 0x99000000.toInt(), false)
+            Style.NEON -> bg(c, W, H, s, 0x66000000, true)
+            Style.RING -> bg(c, W, H, s, 0xCC000000.toInt(), false)
+            Style.NONE -> s.cover?.let { val q = pr(); q.isFilterBitmap = true; crop(c, it, 0f, 0f, W, H, q) }
+        }
+    }
+
     private fun text(c: Canvas, str: String, x: Float, y: Float, size: Float, color: Int, bold: Boolean, align: Paint.Align, maxW: Float = 1e9f) {
         val q = pr(); q.textSize = size; q.color = color; q.textAlign = align
         q.typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
@@ -81,8 +91,7 @@ object StyleRenderer {
     }
 
     private fun player(c: Canvas, W: Float, H: Float, t: Float, s: Spec, b: FloatArray, bass: Float) {
-        bg(c, W, H, s, 0xB0000000.toInt(), false); particles(c, W, H, t, s.accent, bass, 50)
-        val cw = min(W * .9f, H * 1.05f); val ch = cw * .48f
+                val cw = min(W * .9f, H * 1.05f); val ch = cw * .48f
         c.save(); c.translate(W / 2, H * .45f); c.rotate(-1.5f); val k = 1f + .025f * bass; c.scale(k, k)
         val r = RectF(-cw / 2, -ch / 2, cw / 2, ch / 2)
         var q = pr(); q.color = 0xDD0A0A0C.toInt(); q.setShadowLayer(cw * .05f * (.4f + bass), 0f, 0f, s.accent)
@@ -125,8 +134,7 @@ object StyleRenderer {
     }
 
     private fun glass(c: Canvas, W: Float, H: Float, t: Float, s: Spec, b: FloatArray, bass: Float) {
-        bg(c, W, H, s, 0x99000000.toInt(), false); particles(c, W, H, t, s.accent, bass, 30)
-        val cz = min(W * .38f, H * .26f); val cy0 = H * .26f; val k = 1f + .02f * bass
+                val cz = min(W * .38f, H * .26f); val cy0 = H * .26f; val k = 1f + .02f * bass
         var q = pr(); q.color = (s.accent and 0xFFFFFF) or 0x66000000; q.setShadowLayer(W * .06f, 0f, 0f, s.accent)
         c.drawRoundRect(RectF(W * .10f, cy0 + cz * .55f, W * .90f, cy0 + cz + W * .5f), W * .07f, W * .07f, q)
         c.save(); c.scale(k, k, W / 2, cy0 + cz / 2); cover(c, s, (W - cz) / 2, cy0, cz, cz * .08f); c.restore()
@@ -154,8 +162,7 @@ object StyleRenderer {
     }
 
     private fun neon(c: Canvas, W: Float, H: Float, t: Float, s: Spec, b: FloatArray, bass: Float) {
-        bg(c, W, H, s, 0x66000000, true); particles(c, W, H, t, s.accent, bass, 40)
-        val m = min(W, H)
+                val m = min(W, H)
         for (k in 0..1) {
             val q = pr(); q.style = Paint.Style.STROKE; q.strokeWidth = m * .025f * (1f + bass); q.color = s.accent
             q.strokeCap = Paint.Cap.ROUND; q.setShadowLayer(m * .05f, 0f, 0f, s.accent)
@@ -170,8 +177,7 @@ object StyleRenderer {
     }
 
     private fun ring(c: Canvas, W: Float, H: Float, t: Float, s: Spec, b: FloatArray, bass: Float) {
-        bg(c, W, H, s, 0xCC000000.toInt(), false); particles(c, W, H, t, s.accent, bass, 70)
-        val m = min(W, H); val cx = W / 2; val cy = H * .44f; val r0 = m * .24f * (1f + .05f * bass); val n = 72
+                val m = min(W, H); val cx = W / 2; val cy = H * .44f; val r0 = m * .24f * (1f + .05f * bass); val n = 72
         var q = pr(); q.style = Paint.Style.STROKE; q.strokeWidth = m * .008f; q.strokeCap = Paint.Cap.ROUND; q.color = s.accent
         q.setShadowLayer(m * .02f, 0f, 0f, s.accent)
         for (i in 0 until n) {
@@ -200,6 +206,7 @@ object StyleRenderer {
             Style.GLASS -> glass(c, W, H, t, s, b, bass)
             Style.NEON -> neon(c, W, H, t, s, b, bass)
             Style.RING -> ring(c, W, H, t, s, b, bass)
+            Style.NONE -> {}
         }
     }
 }
