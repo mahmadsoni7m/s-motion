@@ -31,6 +31,7 @@ object Scene {
         val g = s.cfg; val W = w.toFloat(); val H = h.toFloat(); val m = min(W, H)
         val fx = g.fx; val e = g.fxi; val sp = t * g.speed; val D = max(1f, s.dur)
         val bass = (b[0] + b[1] + b[2]) / 3f
+        val frame = if (g.useVideo) (s.bgFrame ?: BgVideo.exportSrc?.frame(t, max(w, h), true)) else null
         val filtered = g.bright != 1f || g.contrast != 1f || g.sat != 1f
         val layer = if (filtered) { val lp = Paint(); lp.colorFilter = filter(g); c.saveLayer(0f, 0f, W, H, lp) } else c.save()
         var z = g.zoom
@@ -48,11 +49,11 @@ object Scene {
             if (bm == null || bm.width != sw || bm.height != sh) { bm = Bitmap.createBitmap(sw, sh, Bitmap.Config.ARGB_8888); small = bm }
             bm.eraseColor(0)
             val sc = Canvas(bm); sc.scale(k, k)
-            backdrop(sc, W, H, sp, s, bass)
+            backdrop(sc, W, H, sp, s, bass, frame)
             val q = p(); q.isFilterBitmap = true
             val bg = p(); bg.color = g.base; c.drawRect(-W, -H, 2 * W, 2 * H, bg)
             c.drawBitmap(bm, null, RectF(0f, 0f, W, H), q)
-        } else backdrop(c, W, H, sp, s, bass)
+        } else backdrop(c, W, H, sp, s, bass, frame)
         c.restoreToCount(layer)
         effects(c, W, H, t, s, b, bass)
         if (g.style != Style.NONE) StyleRenderer.draw(c, w, h, t, s, b)
@@ -70,9 +71,10 @@ object Scene {
         for (j in 0 until 10) { val pp = ((j + t * .5f) % 10f) / 10f; val y = hz + (H - hz) * pp * pp; c.drawLine(0f, y, W, y, q) }
     }
 
-    private fun backdrop(c: Canvas, W: Float, H: Float, t: Float, s: Spec, bass: Float) {
+    private fun backdrop(c: Canvas, W: Float, H: Float, t: Float, s: Spec, bass: Float, frame: Bitmap?) {
         val g = s.cfg; val acc = g.accent; val m = min(W, H)
         var q = p(); q.color = g.base; c.drawRect(-W, -H, 2 * W, 2 * H, q)
+        if (frame != null) { StyleRenderer.cropFill(c, frame, W, H); q = p(); q.color = 0x55000000; c.drawRect(-W, -H, 2 * W, 2 * H, q); return }
         if (g.useImage && s.cover != null) { StyleRenderer.backdrop(c, W, H, s); return }
         val def = BGS[g.bg.coerceIn(0, BGS.size - 1)]
         q = p(); q.shader = RadialGradient(W / 2, H * .7f, H * .8f, a(acc, 0x88), a(acc, 0), Shader.TileMode.CLAMP); c.drawRect(-W, -H, 2 * W, 2 * H, q)

@@ -143,7 +143,7 @@ fun Studio() {
     SideEffect { view.keepScreenOn = exporting }
 
     val pickImg = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) { val b = loadBitmap(ctx, uri); if (b != null) { cover = b; cfg = cfg.copy(useImage = true) } else status = "That image could not be read." }
+        if (uri != null) { val b = loadBitmap(ctx, uri); if (b != null) { cover = b; cfg = cfg.copy(useImage = true, useVideo = false) } else status = "That image could not be read." }
     }
     val pickAudio = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
@@ -162,10 +162,26 @@ fun Studio() {
         }
     }
 
+    var bgVideoUri by remember { mutableStateOf<Uri?>(null) }
+    var bgFrame by remember { mutableStateOf<Bitmap?>(null) }
+    val pickVideo = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) { bgVideoUri = uri; cfg = cfg.copy(useVideo = true) }
+    }
+    val vb = remember(bgVideoUri) { bgVideoUri?.let { runCatching { VideoBg(ctx, it) }.getOrNull() } }
+    DisposableEffect(vb) { onDispose { vb?.close() } }
+    LaunchedEffect(vb) {
+        if (vb == null) { bgFrame = null; return@LaunchedEffect }
+        while (true) {
+            val tt = t
+            bgFrame = withContext(Dispatchers.IO) { vb.frame(tt, 720, false) }
+            delay(90)
+        }
+    }
+
     val aDur = an?.durSec
     val trimEnd = if (aDur != null) (if (cfg.trimEnd > cfg.trimStart) min(cfg.trimEnd, aDur) else aDur) else 0f
     val effDur = (if (aDur != null) min(cfg.dur, trimEnd - cfg.trimStart) else cfg.dur).coerceAtLeast(1f)
-    val spec = Spec(cfg.style, cfg.accent, cfg.title, cfg.artist, cfg.handle, effDur, cfg.fps, cover, cfg)
+    val spec = Spec(cfg.style, cfg.accent, cfg.title, cfg.artist, cfg.handle, effDur, cfg.fps, cover, cfg, bgFrame)
     val (outW, outH) = dims(ASPECTS[cfg.ar].second, ASPECTS[cfg.ar].third, cfg.res)
 
     LaunchedEffect(playing) {
@@ -221,16 +237,21 @@ fun Studio() {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Section("LAYOUT AND COLORS") {
                 Chips(Style.values().map { it.label }, cfg.style.ordinal) { cfg = cfg.copy(style = Style.values()[it]) }
+                Sl("Card size", cfg.cardScale, .5f..1.6f) { cfg = cfg.copy(cardScale = it) }
                 Text("Primary", fontSize = 12.sp); ColorRow(ACCENTS, cfg.accent) { cfg = cfg.copy(accent = it) }
                 Text("Secondary (base)", fontSize = 12.sp); ColorRow(BASES, cfg.base) { cfg = cfg.copy(base = it) }
             }
             Section("BACKGROUND") {
-                OutlinedButton(onClick = { pickImg.launch("image/*") }) { Text(if (cover == null) "Upload image" else "Change image") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { pickImg.launch("image/*") }) { Text(if (cover == null) "Upload image" else "Change image") }
+                    OutlinedButton(onClick = { pickVideo.launch("video/*") }) { Text(if (bgVideoUri == null) "Upload video" else "Change video") }
+                }
+                if (bgVideoUri != null) Row(verticalAlignment = Alignment.CenterVertically) { Switch(cfg.useVideo, { cfg = cfg.copy(useVideo = it) }); Spacer(Modifier.width(8.dp)); Text("Use my video (slower export)", fontSize = 13.sp) }
                 if (cover != null) Row(verticalAlignment = Alignment.CenterVertically) { Switch(cfg.useImage, { cfg = cfg.copy(useImage = it) }); Spacer(Modifier.width(8.dp)); Text("Use my image", fontSize = 13.sp) }
                 Text("Library (" + BGS.size + ")", fontSize = 12.sp)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BGS.forEachIndexed { i, d ->
-                        FilterChip(selected = !cfg.useImage && cfg.bg == i || (cover == null && cfg.bg == i), onClick = { cfg = cfg.copy(bg = i, accent = d.accent, base = d.base, useImage = false) }, label = { Text(d.name, fontSize = 12.sp) })
+                        FilterChip(selected = !cfg.useImage && cfg.bg == i || (cover == null && cfg.bg == i), onClick = { cfg = cfg.copy(bg = i, accent = d.accent, base = d.base, useImage = false, useVideo = false) }, label = { Text(d.name, fontSize = 12.sp) })
                     }
                 }
                 Sl("Brightness", cfg.bright, .5f..1.5f) { cfg = cfg.copy(bright = it) }
@@ -259,7 +280,7 @@ fun Studio() {
                 Sl("Particle density", cfg.dens, 0f..2f) { cfg = cfg.copy(dens = it) }
             }
             Section("MUSIC") {
-                OutlinedButton(onClick = { pickAudio.launch("audio/*") }) { Text(if (audioUri == null) "Choose music" else "Change music") }
+                OutlinedButton(onClick = { pickAudio.launch("*/*") }) { Text(if (audioUri == null) "Choose music" else "Change music") }
                 val a = an
                 if (a != null) {
                     Sl("Start (s)", cfg.trimStart, 0f..(a.durSec - 1f).coerceAtLeast(0.1f), "%.1f") { cfg = cfg.copy(trimStart = it); t = 0f; playing = false }
@@ -268,7 +289,7 @@ fun Studio() {
                 Sl("Volume", cfg.vol, 0f..1f) { cfg = cfg.copy(vol = it) }
                 Row(verticalAlignment = Alignment.CenterVertically) { Switch(cfg.mute, { cfg = cfg.copy(mute = it) }); Spacer(Modifier.width(8.dp)); Text("Mute", fontSize = 13.sp) }
                 Row(verticalAlignment = Alignment.CenterVertically) { Switch(cfg.audioOn, { cfg = cfg.copy(audioOn = it) }); Spacer(Modifier.width(8.dp)); Text("Include audio in export", fontSize = 13.sp) }
-                Text("Use only music and images you own or may use.", fontSize = 11.sp, color = Color.Gray)
+                Text("Any audio or video file works. Use only music and images you own or may use.", fontSize = 11.sp, color = Color.Gray)
             }
             Section("TEXT") {
                 OutlinedTextField(cfg.title, { cfg = cfg.copy(title = it.take(60)) }, label = { Text("Card title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -291,10 +312,12 @@ fun Studio() {
                     Button(onClick = {
                         playing = false; result = null; exporting = true; progress = 0f; status = "Rendering... keep the screen on."
                         val ex = Exporter(ctx); exporter = ex
+                        BgVideo.exportSrc = if (cfg.useVideo) bgVideoUri?.let { runCatching { VideoBg(ctx, it) }.getOrNull() } else null
                         val glitch = if ("glitch" in cfg.fx) 0.6f * cfg.fxi else 0f
                         val gain = if (cfg.mute) 0f else cfg.vol
                         try {
-                            ex.start(spec, outW, outH, an, if (cfg.audioOn) audioUri else null, cfg.trimStart, effDur, glitch, gain) { file, err ->
+                            ex.start(spec.withFrame(null), outW, outH, an, if (cfg.audioOn) audioUri else null, cfg.trimStart, effDur, glitch, gain) { file, err ->
+                                BgVideo.exportSrc?.close(); BgVideo.exportSrc = null
                                 exporting = false
                                 if (file != null) { result = saveToGallery(ctx, file); status = if (result != null) "Saved to Movies/SONI" else "Rendered, but saving to the gallery failed." }
                                 else status = "Export failed: $err"
@@ -303,7 +326,7 @@ fun Studio() {
                     }, modifier = Modifier.fillMaxWidth()) { Text("Start export") }
                 } else {
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                    OutlinedButton(onClick = { exporter?.cancel(); exporting = false; status = "Export cancelled." }) { Text("Cancel") }
+                    OutlinedButton(onClick = { exporter?.cancel(); BgVideo.exportSrc?.close(); BgVideo.exportSrc = null; exporting = false; status = "Export cancelled." }) { Text("Cancel") }
                 }
                 if (status.isNotEmpty()) Text(status, color = CYAN, fontSize = 13.sp)
                 result?.let { u ->

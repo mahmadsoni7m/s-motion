@@ -52,7 +52,8 @@ data class Cfg(
     val bright: Float = 1f, val contrast: Float = 1f, val sat: Float = 1f, val blur: Float = 0f, val zoom: Float = 1f, val rot: Float = 0f,
     val speed: Float = 1f, val motion: Float = 1f, val fxi: Float = 1f, val glow: Float = 1f, val dens: Float = 1f,
     val vol: Float = 1f, val mute: Boolean = false, val audioOn: Boolean = true, val trimStart: Float = 0f, val trimEnd: Float = 0f,
-    val text: String = "", val font: Int = 0, val tsize: Float = 8f, val tx: Float = 50f, val ty: Float = 50f, val tcolor: Int = TCOLORS[0]
+    val text: String = "", val font: Int = 0, val tsize: Float = 8f, val tx: Float = 50f, val ty: Float = 50f, val tcolor: Int = TCOLORS[0],
+    val cardScale: Float = 1f, val useVideo: Boolean = false
 )
 
 fun Cfg.toJson(): JSONObject = JSONObject().apply {
@@ -63,7 +64,7 @@ fun Cfg.toJson(): JSONObject = JSONObject().apply {
     put("zoom", zoom.toDouble()); put("rot", rot.toDouble()); put("speed", speed.toDouble()); put("motion", motion.toDouble())
     put("fxi", fxi.toDouble()); put("glow", glow.toDouble()); put("dens", dens.toDouble()); put("vol", vol.toDouble())
     put("mute", mute); put("audioOn", audioOn); put("trimStart", trimStart.toDouble()); put("trimEnd", trimEnd.toDouble())
-    put("text", text); put("font", font); put("tsize", tsize.toDouble()); put("tx", tx.toDouble()); put("ty", ty.toDouble()); put("tcolor", tcolor)
+    put("text", text); put("font", font); put("tsize", tsize.toDouble()); put("tx", tx.toDouble()); put("ty", ty.toDouble()); put("tcolor", tcolor); put("cardScale", cardScale.toDouble())
 }
 
 private fun JSONObject.f(k: String, d: Float, lo: Float, hi: Float) = optDouble(k, d.toDouble()).toFloat().coerceIn(lo, hi)
@@ -85,7 +86,7 @@ fun cfgFromJson(o: JSONObject): Cfg? = try {
         fxi = o.f("fxi", 1f, 0f, 2f), glow = o.f("glow", 1f, 0f, 2f), dens = o.f("dens", 1f, 0f, 2f), vol = o.f("vol", 1f, 0f, 1f),
         mute = o.optBoolean("mute", false), audioOn = o.optBoolean("audioOn", true), trimStart = o.f("trimStart", 0f, 0f, 3600f), trimEnd = o.f("trimEnd", 0f, 0f, 3600f),
         text = o.optString("text", "").take(80), font = o.optInt("font", 0).coerceIn(0, FONT_NAMES.size - 1), tsize = o.f("tsize", 8f, 2f, 25f),
-        tx = o.f("tx", 50f, 0f, 100f), ty = o.f("ty", 50f, 0f, 100f), tcolor = o.optInt("tcolor", d.tcolor)
+        tx = o.f("tx", 50f, 0f, 100f), ty = o.f("ty", 50f, 0f, 100f), tcolor = o.optInt("tcolor", d.tcolor), cardScale = o.f("cardScale", 1f, .5f, 1.6f)
     )
 } catch (e: Exception) { null }
 

@@ -3,9 +3,11 @@ package com.soni.motionstudio
 import android.graphics.*
 import kotlin.math.*
 
-enum class Style(val label: String) { PLAYER("Player card"), GLASS("Glass cover"), NEON("Neon timer"), RING("Ring logo"), NONE("Effects only") }
+enum class Style(val label: String) { PLAYER("Player card"), GLASS("Glass cover"), NEON("Neon timer"), RING("Ring logo"), NONE("Effects only"), MINIMAL("Minimal wave"), VINYL("Vinyl"), ORBIT("Orbit"), STACK("Bars wall") }
 
-class Spec(val style: Style, val accent: Int, val title: String, val artist: String, val handle: String, val dur: Float, val fps: Int, val cover: Bitmap?, val cfg: Cfg = Cfg())
+class Spec(val style: Style, val accent: Int, val title: String, val artist: String, val handle: String, val dur: Float, val fps: Int, val cover: Bitmap?, val cfg: Cfg = Cfg(), val bgFrame: Bitmap? = null) {
+    fun withFrame(f: Bitmap?) = Spec(style, accent, title, artist, handle, dur, fps, cover, cfg, f)
+}
 
 /** Draws one frame of every style with the Android Canvas. Used for both preview and export. */
 object StyleRenderer {
@@ -56,13 +58,17 @@ object StyleRenderer {
             Style.GLASS -> bg(c, W, H, s, 0x99000000.toInt(), false)
             Style.NEON -> bg(c, W, H, s, 0x66000000, true)
             Style.RING -> bg(c, W, H, s, 0xCC000000.toInt(), false)
+            Style.MINIMAL -> bg(c, W, H, s, 0xDD101010.toInt(), false)
+            Style.VINYL -> bg(c, W, H, s, 0xAA000000.toInt(), false)
+            Style.ORBIT -> bg(c, W, H, s, 0x99000000.toInt(), false)
+            Style.STACK -> bg(c, W, H, s, 0xB0000000.toInt(), false)
             Style.NONE -> s.cover?.let { val q = pr(); q.isFilterBitmap = true; crop(c, it, 0f, 0f, W, H, q) }
         }
     }
 
-    private fun text(c: Canvas, str: String, x: Float, y: Float, size: Float, color: Int, bold: Boolean, align: Paint.Align, maxW: Float = 1e9f) {
+    private fun text(c: Canvas, str: String, x: Float, y: Float, size: Float, color: Int, bold: Boolean, align: Paint.Align, maxW: Float = 1e9f, serif: Boolean = false) {
         val q = pr(); q.textSize = size; q.color = color; q.textAlign = align
-        q.typeface = Typeface.create(Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
+        q.typeface = Typeface.create(if (serif) Typeface.SERIF else Typeface.SANS_SERIF, if (bold) Typeface.BOLD else Typeface.NORMAL)
         val tw = q.measureText(str)
         if (tw > maxW) q.textScaleX = maxW / tw
         c.drawText(str, x, y, q)
@@ -199,14 +205,121 @@ object StyleRenderer {
         text(c, s.handle, cx, H * .91f, m * .035f, 0xAAFFFFFF.toInt(), false, Paint.Align.CENTER, W * .6f)
     }
 
+    fun cropFill(c: Canvas, b: Bitmap, W: Float, H: Float) { val q = pr(); q.isFilterBitmap = true; crop(c, b, 0f, 0f, W, H, q) }
+
+    private fun minimal(c: Canvas, W: Float, H: Float, t: Float, s: Spec, b: FloatArray, bass: Float) {
+        val cz = W * .22f; val x0 = (W - cz) / 2; val y0 = H * .2f
+        var q = pr(); q.style = Paint.Style.STROKE; q.strokeWidth = W * .003f; q.color = 0x88FFFFFF.toInt()
+        c.drawRoundRect(RectF(x0, y0, x0 + cz, y0 + cz), W * .012f, W * .012f, q)
+        cover(c, s, x0, y0, cz, W * .012f)
+        text(c, s.title, W / 2, y0 + cz + W * .1f, W * .045f, Color.WHITE, true, Paint.Align.CENTER, W * .9f, true)
+        text(c, s.artist, W / 2, y0 + cz + W * .17f, W * .035f, 0xCCFFFFFF.toInt(), false, Paint.Align.CENTER, W * .8f, true)
+        val ry = y0 + cz + W * .29f; val r = W * .055f
+        q = pr(); q.color = 0x33FFFFFF; c.drawCircle(W * .15f, ry, r, q)
+        text(c, s.fps.toString(), W * .15f, ry + r * .35f, r * .9f, 0xAAFFFFFF.toInt(), false, Paint.Align.CENTER)
+        q = pr(); q.color = 0x55FFFFFF; c.drawCircle(W * .85f, ry, r, q)
+        q = pr(); q.color = 0xFF202020.toInt(); c.drawRect(W * .85f - r * .3f, ry - r * .3f, W * .85f + r * .3f, ry + r * .3f, q)
+        val n = 64; val lx = W * .26f; val lw = W * .48f
+        for (i in 0 until n) {
+            val v = lvl(b, i, n); val hh = W * .004f + (if (i % 8 == 0) W * .03f * v else W * .008f * v)
+            q = pr(); q.color = 0xCCFFFFFF.toInt(); c.drawRect(lx + i * lw / n, ry - hh, lx + i * lw / n + lw / n * .5f, ry + hh, q)
+        }
+        val wy = ry + W * .22f; val nb = 46
+        for (i in 0 until nb) {
+            val v = lvl(b, i, nb); val hh = W * .02f + W * .05f * v * (if (i % 2 == 0) 1f else .5f)
+            q = pr(); q.color = if (i / nb.toFloat() < t / s.dur) 0xFFFFFFFF.toInt() else 0x88FFFFFF.toInt()
+            c.drawRoundRect(RectF(i * W / nb + 2f, wy - hh, i * W / nb + W / nb * .45f, wy + hh), 3f, 3f, q)
+        }
+        val bw = W * .32f; val bh = W * .16f
+        q = pr(); q.color = 0xFFF2F2F2.toInt(); q.setShadowLayer(W * .02f * (1f + bass), 0f, 0f, s.accent)
+        c.drawRoundRect(RectF(W / 2 - bw / 2, wy - bh / 2, W / 2 + bw / 2, wy + bh / 2), W * .008f, W * .008f, q)
+        for (i in 0 until 9) {
+            val v = lvl(b, i * 3, 27); val hh = bh * (.12f + .3f * v); val bx = W / 2 - bw / 2 + bw * (.1f + i * .09f)
+            q = pr(); q.color = 0xFF2A2A2A.toInt(); c.drawRoundRect(RectF(bx, wy - hh, bx + bw * .04f, wy + hh), 3f, 3f, q)
+        }
+        text(c, s.handle, W / 2, wy + bh / 2 + W * .09f, W * .04f, Color.WHITE, true, Paint.Align.CENTER, W * .6f, true)
+    }
+
+    private fun vinyl(c: Canvas, W: Float, H: Float, t: Float, s: Spec, b: FloatArray, bass: Float) {
+        val cx = W / 2; val cy = H * .38f; val R = W * .32f; val n = 64
+        var q = pr(); q.style = Paint.Style.STROKE; q.strokeCap = Paint.Cap.ROUND; q.strokeWidth = W * .008f; q.color = s.accent; q.setShadowLayer(W * .02f, 0f, 0f, s.accent)
+        for (i in 0 until n) {
+            val a = (2 * PI * i / n).toFloat(); val l = W * .01f + W * .08f * lvl(b, i % 32, 32)
+            c.drawLine(cx + cos(a) * R * 1.08f, cy + sin(a) * R * 1.08f, cx + cos(a) * (R * 1.08f + l), cy + sin(a) * (R * 1.08f + l), q)
+        }
+        c.save(); c.rotate(t * 40f, cx, cy)
+        q = pr(); q.color = 0xFF0B0B0D.toInt(); c.drawCircle(cx, cy, R, q)
+        q = pr(); q.style = Paint.Style.STROKE; q.strokeWidth = 1.5f; q.color = 0x22FFFFFF
+        var rr = R * .42f
+        while (rr < R) { c.drawCircle(cx, cy, rr, q); rr += R * .045f }
+        q = pr(); q.shader = SweepGradient(cx, cy, intArrayOf(0x00FFFFFF, 0x33FFFFFF, 0x00FFFFFF, 0x00FFFFFF, 0x33FFFFFF, 0x00FFFFFF), null); c.drawCircle(cx, cy, R, q)
+        c.save(); val path = Path(); path.addCircle(cx, cy, R * .36f, Path.Direction.CW); c.clipPath(path)
+        val cv = s.cover
+        q = pr()
+        if (cv != null) { q.isFilterBitmap = true; crop(c, cv, cx - R * .36f, cy - R * .36f, R * .72f, R * .72f, q) } else { q.color = s.accent; c.drawCircle(cx, cy, R * .36f, q) }
+        c.restore()
+        q = pr(); q.color = 0xFF050507.toInt(); c.drawCircle(cx, cy, R * .04f, q)
+        c.restore()
+        text(c, s.title, W / 2, cy + R + W * .14f, W * .055f, Color.WHITE, true, Paint.Align.CENTER, W * .88f)
+        text(c, s.artist, W / 2, cy + R + W * .21f, W * .04f, 0xCCFFFFFF.toInt(), false, Paint.Align.CENTER, W * .8f)
+        val ly = cy + R + W * .3f; val lx = W * .14f; val rx = W * .86f; val prog = (t / s.dur).coerceIn(0f, 1f)
+        q = pr(); q.color = 0x55FFFFFF; q.strokeWidth = W * .006f; q.strokeCap = Paint.Cap.ROUND; c.drawLine(lx, ly, rx, ly, q)
+        q.color = s.accent; c.drawLine(lx, ly, lx + (rx - lx) * prog, ly, q)
+        text(c, fmtT(t), lx, ly + W * .05f, W * .03f, 0xCCFFFFFF.toInt(), false, Paint.Align.LEFT)
+        text(c, s.handle, rx, ly + W * .05f, W * .03f, 0xCCFFFFFF.toInt(), false, Paint.Align.RIGHT)
+    }
+
+    private fun orbit(c: Canvas, W: Float, H: Float, t: Float, s: Spec, b: FloatArray, bass: Float) {
+        val cx = W / 2; val cy = H * .4f; val r = W * .24f * (1f + .03f * bass); val ro = r * 1.22f
+        var q = pr(); q.style = Paint.Style.STROKE; q.strokeWidth = W * .012f; q.color = 0x33FFFFFF; c.drawCircle(cx, cy, ro, q)
+        q = pr(); q.style = Paint.Style.STROKE; q.strokeWidth = W * .012f; q.strokeCap = Paint.Cap.ROUND; q.color = s.accent; q.setShadowLayer(W * .03f, 0f, 0f, s.accent)
+        c.drawArc(RectF(cx - ro, cy - ro, cx + ro, cy + ro), -90f, 360f * (t / s.dur).coerceIn(0f, 1f), false, q)
+        for (k in 0 until 3) {
+            val a = t * (.6f + k * .3f) + k * 2.1f; val rr = r * (1.45f + k * .12f)
+            q = pr(); q.color = s.accent; q.alpha = 160; c.drawCircle(cx + cos(a) * rr, cy + sin(a) * rr, W * (.012f + .006f * k) * (1f + bass), q)
+        }
+        c.save(); val path = Path(); path.addCircle(cx, cy, r, Path.Direction.CW); c.clipPath(path)
+        val cv = s.cover; q = pr()
+        if (cv != null) { q.isFilterBitmap = true; crop(c, cv, cx - r, cy - r, r * 2, r * 2, q) }
+        else { q.shader = LinearGradient(cx - r, cy - r, cx + r, cy + r, s.accent, 0xFF111118.toInt(), Shader.TileMode.CLAMP); c.drawCircle(cx, cy, r, q) }
+        c.restore()
+        text(c, s.title, cx, cy + ro + W * .12f, W * .055f, Color.WHITE, true, Paint.Align.CENTER, W * .88f)
+        text(c, s.artist, cx, cy + ro + W * .19f, W * .04f, 0xCCFFFFFF.toInt(), false, Paint.Align.CENTER, W * .8f)
+        text(c, fmtT(t) + " / " + fmtT(s.dur), cx, cy + ro + W * .26f, W * .035f, 0xAAFFFFFF.toInt(), false, Paint.Align.CENTER)
+        val n = 28; val bw = W * .5f / n; val by = cy + ro + W * .42f
+        for (i in 0 until n) { q = pr(); q.color = s.accent; val hh = W * .01f + W * .07f * lvl(b, i, n); c.drawRoundRect(RectF(W * .25f + i * bw, by - hh, W * .25f + i * bw + bw * .6f, by + hh), 3f, 3f, q) }
+    }
+
+    private fun stack(c: Canvas, W: Float, H: Float, t: Float, s: Spec, b: FloatArray, bass: Float) {
+        val cy = H * .5f; val n = 34; val bw = W / n
+        for (i in 0 until n) {
+            val q = pr(); q.color = s.accent; q.setShadowLayer(W * .02f, 0f, 0f, s.accent); q.alpha = 230
+            val hh = H * .02f + H * .22f * lvl(b, i, n)
+            c.drawRoundRect(RectF(i * bw + bw * .18f, cy - hh, i * bw + bw * .82f, cy + hh), bw * .2f, bw * .2f, q)
+        }
+        text(c, s.title, W / 2, cy + W * .035f, W * .1f * (1f + .04f * bass), Color.WHITE, true, Paint.Align.CENTER, W * .92f)
+        text(c, s.artist, W / 2, cy + W * .13f, W * .04f, 0xDDFFFFFF.toInt(), false, Paint.Align.CENTER, W * .8f)
+        val ly = H * .9f; val lx = W * .1f; val rx = W * .9f
+        val q = pr(); q.color = 0x55FFFFFF; q.strokeWidth = W * .006f; q.strokeCap = Paint.Cap.ROUND; c.drawLine(lx, ly, rx, ly, q)
+        q.color = Color.WHITE; c.drawLine(lx, ly, lx + (rx - lx) * (t / s.dur).coerceIn(0f, 1f), ly, q)
+        text(c, fmtT(t), lx, ly + W * .05f, W * .03f, 0xCCFFFFFF.toInt(), false, Paint.Align.LEFT)
+        text(c, s.handle, rx, ly + W * .05f, W * .03f, 0xCCFFFFFF.toInt(), false, Paint.Align.RIGHT)
+    }
+
     fun draw(c: Canvas, w: Int, h: Int, t: Float, s: Spec, b: FloatArray) {
         val W = w.toFloat(); val H = h.toFloat(); val bass = (b[0] + b[1] + b[2]) / 3f
+        val k = s.cfg.cardScale; c.save(); c.scale(k, k, W / 2, H * .5f)
         when (s.style) {
             Style.PLAYER -> player(c, W, H, t, s, b, bass)
             Style.GLASS -> glass(c, W, H, t, s, b, bass)
             Style.NEON -> neon(c, W, H, t, s, b, bass)
             Style.RING -> ring(c, W, H, t, s, b, bass)
             Style.NONE -> {}
+            Style.MINIMAL -> minimal(c, W, H, t, s, b, bass)
+            Style.VINYL -> vinyl(c, W, H, t, s, b, bass)
+            Style.ORBIT -> orbit(c, W, H, t, s, b, bass)
+            Style.STACK -> stack(c, W, H, t, s, b, bass)
         }
+        c.restore()
     }
 }

@@ -111,7 +111,7 @@ class Exporter(private val ctx: Context) {
         if (audioUri != null) {
             val clip = MediaItem.ClippingConfiguration.Builder()
                 .setStartPositionMs((audioStart * 1000).toLong()).setEndPositionMs(((audioStart + durSec) * 1000).toLong()).build()
-            val ai = EditedMediaItem.Builder(MediaItem.Builder().setUri(audioUri).setClippingConfiguration(clip).build()).setEffects(Effects(listOf<AudioProcessor>(GainProcessor(gain)), emptyList())).build()
+            val ai = EditedMediaItem.Builder(MediaItem.Builder().setUri(audioUri).setClippingConfiguration(clip).build()).setRemoveVideo(true).setEffects(Effects(listOf<AudioProcessor>(GainProcessor(gain)), emptyList())).build()
             seqs.add(EditedMediaItemSequence(listOf(ai)))
         }
         val t = Transformer.Builder(ctx)
